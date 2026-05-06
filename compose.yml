@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c work_mem=2MB
+      -c maintenance_work_mem=32MB
+      -c effective_cache_size=128MB
+      -c max_connections=15
+      -c wal_buffers=4MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+    environment:
+      POSTGRES_DB: lootlabs_reward_role
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: '64m'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d lootlabs_reward_role"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  lootlabs-reward-role:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${PORT:-8088}:8088"
+    environment:
+      - DATABASE_URL=postgres://app:${POSTGRES_PASSWORD:-changeme}@db:5432/lootlabs_reward_role
+      - SESSION_SECRET=${SESSION_SECRET:?must match the Auth Gateway}
+      - BASE_URL=${BASE_URL:?required, e.g. https://plugin-rolelogic.faizo.net/lootlabs-reward-role}
+      - AUTH_GATEWAY_URL=${AUTH_GATEWAY_URL:-http://auth-gateway:8090}
+      - LISTEN_ADDR=0.0.0.0:8088
+      - RUST_LOG=${RUST_LOG:-lootlabs_reward_role=info,tower_http=info}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  pgdata:
