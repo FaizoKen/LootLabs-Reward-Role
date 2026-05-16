@@ -20,6 +20,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub config: config::AppConfig,
     pub rl_client: RoleLogicClient,
+    pub http: reqwest::Client,
 }
 
 #[tokio::main]
@@ -41,11 +42,16 @@ async fn main() {
     tracing::info!("Database connected and migrations applied");
 
     let rl_client = RoleLogicClient::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .expect("Failed to build HTTP client");
 
     let state = Arc::new(AppState {
         pool,
         config: app_config,
         rl_client,
+        http,
     });
 
     tokio::spawn(tasks::role_expiry_worker::run(Arc::clone(&state)));
