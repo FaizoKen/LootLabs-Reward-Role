@@ -2,6 +2,11 @@ use std::time::Duration;
 
 use crate::error::AppError;
 
+/// Body substring RoleLogic returns when our token isn't found server-side.
+/// Because `RoleLinkToken` rows cascade on `RoleLink` delete, getting this
+/// reliably signals the role link has been deleted upstream.
+const RL_LINK_GONE_ERROR_MSG: &str = "Invalid or revoked token";
+
 /// Minimal RoleLogic User Management API client. We only need add/remove
 /// for this plugin — no bulk replace, no chunked upload (our roster grows
 /// one user at a time as completions roll in).
@@ -50,6 +55,9 @@ impl RoleLogicClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
+            if status == reqwest::StatusCode::FORBIDDEN && body.contains(RL_LINK_GONE_ERROR_MSG) {
+                return Err(AppError::RoleLinkNotFound);
+            }
             return Err(AppError::RoleLogic(format!(
                 "Add user failed: {status} - {body}"
             )));
@@ -80,6 +88,9 @@ impl RoleLogicClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
+            if status == reqwest::StatusCode::FORBIDDEN && body.contains(RL_LINK_GONE_ERROR_MSG) {
+                return Err(AppError::RoleLinkNotFound);
+            }
             return Err(AppError::RoleLogic(format!(
                 "Remove user failed: {status} - {body}"
             )));

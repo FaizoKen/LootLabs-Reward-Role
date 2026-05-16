@@ -43,7 +43,7 @@ async fn sweep_once(state: &AppState) -> Result<(), sqlx::Error> {
     }
     tracing::info!(count = rows.len(), "Expiring claims");
 
-    for (claim_id, _reg_id, discord_id, guild_id, role_id, rl_token) in rows {
+    for (claim_id, reg_id, discord_id, guild_id, role_id, rl_token) in rows {
         match state
             .rl_client
             .remove_user(&guild_id, &role_id, &discord_id, &rl_token)
@@ -55,6 +55,23 @@ async fn sweep_once(state: &AppState) -> Result<(), sqlx::Error> {
                     .execute(&state.pool)
                     .await;
                 tracing::info!(claim_id = ?claim_id, discord_id, "Role expired & revoked");
+            }
+            Err(crate::error::AppError::RoleLinkNotFound) => {
+                // Role link is gone upstream — drop the registration so we
+                // stop trying to revoke against it. CASCADE clears claims.
+                tracing::warn!(
+                    reg_id = ?reg_id,
+                    guild_id,
+                    role_id,
+                    "Role link gone on RoleLogic; deleting orphan registration"
+                );
+                if let Err(e) = sqlx::query("DELETE FROM registrations WHERE id = $1")
+                    .bind(reg_id)
+                    .execute(&state.pool)
+                    .await
+                {
+                    tracing::error!(reg_id = ?reg_id, "Failed to delete orphan registration: {e}");
+                }
             }
             Err(e) => {
                 // Leave revoked_at NULL so we retry next tick.

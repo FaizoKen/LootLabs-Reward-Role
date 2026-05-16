@@ -160,6 +160,7 @@ pub async fn callback(
     // Push the role to RoleLogic out-of-band so we can return to Loot Labs fast.
     let rl = state.rl_client.clone();
     let user_id = discord_id.clone();
+    let pool = state.pool.clone();
     tokio::spawn(async move {
         match rl.add_user(&guild_id, &role_id, &user_id, &rl_token).await {
             Ok(added) => tracing::info!(
@@ -169,6 +170,21 @@ pub async fn callback(
                 ?claim_expires_at,
                 "✓ claim granted via RoleLogic"
             ),
+            Err(crate::error::AppError::RoleLinkNotFound) => {
+                tracing::warn!(
+                    ?registration_id,
+                    guild_id,
+                    role_id,
+                    "Role link gone on RoleLogic; deleting orphan registration"
+                );
+                if let Err(e) = sqlx::query("DELETE FROM registrations WHERE id = $1")
+                    .bind(registration_id)
+                    .execute(&pool)
+                    .await
+                {
+                    tracing::error!(?registration_id, "Failed to delete orphan registration: {e}");
+                }
+            }
             Err(e) => tracing::error!(
                 ?registration_id,
                 discord_id = user_id,

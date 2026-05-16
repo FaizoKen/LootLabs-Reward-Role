@@ -10,6 +10,9 @@ pub enum AppError {
     #[error("RoleLogic API error: {0}")]
     RoleLogic(String),
 
+    #[error("Role link not found on RoleLogic")]
+    RoleLinkNotFound,
+
     #[error("Invalid request: {0}")]
     BadRequest(String),
 
@@ -37,6 +40,7 @@ impl IntoResponse for AppError {
                 tracing::error!("RoleLogic API error: {e}");
                 (StatusCode::BAD_GATEWAY, "Failed to sync roles")
             }
+            AppError::RoleLinkNotFound => (StatusCode::NOT_FOUND, "Role link not found"),
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.as_str()),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Invalid or missing authorization"),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden"),
