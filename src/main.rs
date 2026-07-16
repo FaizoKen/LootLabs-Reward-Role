@@ -72,6 +72,7 @@ async fn main() {
                 // Member-facing claim flow
                 .route("/claim/{registration_id}", get(routes::claim::start))
                 // Static
+                .route("/dweeb/status", get(routes::dweeb::status))
                 .route("/health", get(routes::health::health))
                 .route("/favicon.ico", get(routes::health::favicon)),
         )
